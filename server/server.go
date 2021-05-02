@@ -10,11 +10,11 @@ import (
 )
 
 /*
-StartRouter defines the endpoints that use the db_pool for database connections
+StartRouter defines the exposed endpoints, some of which
+make sure of itemStore as we are not using a persistent database
 */
 func StartRouter(itemStore *store.Store) {
-	// enable graceful shutdown per http documentation
-
+	// net/http server
 	var srv http.Server
 	srv.Addr = ":8080"
 	// Overriding some limits and timeouts
@@ -29,9 +29,6 @@ func StartRouter(itemStore *store.Store) {
 	router.HandleFunc("/hash", func(w http.ResponseWriter, r *http.Request) {
 		GetHashHandler(itemStore, w, r)
 	})
-	router.HandleFunc("/hash/:id", func(w http.ResponseWriter, r *http.Request) {
-		GetHashHandler(itemStore, w, r)
-	})
 	router.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Shutting Down"))
 		ctx, cancel := context.WithCancel(context.Background())
@@ -42,7 +39,7 @@ func StartRouter(itemStore *store.Store) {
 		}
 	})
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		HandlerDefault(w, r)
+		HandlerDefault(itemStore, w, r)
 	})
 
 	srv.Handler = router

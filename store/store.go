@@ -4,16 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/simrie/go_demo.git/hasher"
 )
 
 /*
 Item type has the requested order, resulting crypto value and duration to complete encryption
 */
 type Item struct {
-	Order    int32         `json:"order"`
-	Value    string        `json:"value"`
-	Duration time.Duration `json:"duration"`
-	Publish  *time.Time    `json:"publish"`
+	//Order     int32      `json:"order"`
+	Value     string     `json:"value"`
+	Requested *time.Time `json:"requested"`
+	Publish   *time.Time `json:"publish"`
 }
 
 /*
@@ -54,10 +56,30 @@ func (s *Store) GetStats() (Stats, error) {
 }
 
 /*
-GetItem returns the item by Order key only if
+CreateItem accepts a string and returns an Item
+that contains a Value that is the hash of the string
+*/
+func CreateItem(str string) (Item, error) {
+	var item Item = Item{}
+	if str == "" {
+		return item, errors.New("missing string to encode")
+	}
+	hasher := hasher.Encode
+	value, err := hasher(str)
+	if err != nil {
+		return item, errors.New("missing encoded value")
+	}
+	requested := time.Now()
+	item.Requested = &requested
+	item.Value = value
+	return item, nil
+}
+
+/*
+GetItemById returns the item by Order key only if
 the current time is after the item's Publish time
 */
-func (s *Store) GetItem(i int32) (Item, error) {
+func (s *Store) GetItemById(i int32) (Item, error) {
 	item, ok := s.Items[i]
 	if !ok {
 		msg := fmt.Sprintf("Item %d not found.", i)
@@ -72,22 +94,24 @@ func (s *Store) GetItem(i int32) (Item, error) {
 }
 
 /*
-StoreItem stores the item only if it has Value, Duration and Publish time
+StoreItem stores the item only if it has Value and Requested time
 */
 func (s *Store) StoreItem(item Item) (int32, error) {
 
-	if item.Duration == 0 {
-		return 0, errors.New("missing duration")
-	}
-	if item.Publish == nil {
-		return 0, errors.New("missing Publish")
+	if item.Requested == nil {
+		return 0, errors.New("missing Requested")
 	}
 	if item.Value == "" {
 		return 0, errors.New("missing value")
 	}
+	t := item.Requested
+	// Do not allow access to item until 5 seconds from now
+	publishTime := t.Add(time.Second * 5)
+	item.Publish = &publishTime
+	// Get a duration for the time to hash and update store
+	duration := publishTime.Sub(*item.Requested)
 	s.Counter = s.Counter + 1
-	s.Durations = s.Durations + item.Duration.Nanoseconds()
-	item.Order = s.Counter
-	s.Items[item.Order] = item
-	return item.Order, nil
+	s.Durations = s.Durations + duration.Nanoseconds()
+	s.Items[s.Counter] = item
+	return s.Counter, nil
 }
