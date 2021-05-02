@@ -14,7 +14,7 @@ import (
 )
 
 /*
-GetStatsHandler returns the Stats on the items in the store
+GetStatsHandler returns the Stats on the items in the Store
 */
 func GetStatsHandler(itemStore *store.Store, response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("content-type", "application/json")
@@ -36,7 +36,8 @@ func GetStatsHandler(itemStore *store.Store, response http.ResponseWriter, reque
 }
 
 /*
-GetHashHandler posts an item to or gets an item from the item store
+GetHashHandler retrieves a hashed value of a string
+and then stores it as an Item in the Store
 */
 func GetHashHandler(itemStore *store.Store, response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("content-type", "text/plain")
