@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simrie/go_demo.git/hasher"
 	"github.com/simrie/go_demo.git/store"
 )
 
@@ -46,8 +45,7 @@ func GetHashHandler(itemStore *store.Store, response http.ResponseWriter, reques
 	_, cancel := context.WithTimeout(parentCtx, 10*time.Second)
 	defer cancel()
 
-	// Fall through if request Method is unknown
-
+	// Only process Post requests
 	if request.Method != http.MethodPost {
 		response.WriteHeader(http.StatusBadRequest)
 		log.Printf("\nGetHashHandler : Unknown Method")
@@ -60,34 +58,44 @@ func GetHashHandler(itemStore *store.Store, response http.ResponseWriter, reques
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		log.Printf("\nGetHashHandler %v: ", err.Error())
-		response.Write([]byte(`"Error": Hasher error "`))
+		response.Write([]byte(`"Error": Request data not readable "`))
 		return
 	}
 	strBody := string(b)
 	if strBody == "" {
 		response.WriteHeader(http.StatusBadRequest)
 		log.Printf("\nGetHashHandler %v: ", err.Error())
-		response.Write([]byte(`"Error": Missing Password "`))
+		response.Write([]byte(`"Error": Data is not a string "`))
 		return
 	}
 	args := strings.Split(strBody, "assword=")
 	if len(args) <= 0 {
 		response.WriteHeader(http.StatusBadRequest)
 		log.Printf("\nGetHashHandler %v: ", err.Error())
-		response.Write([]byte(`"Error": Missing Password "`))
+		response.Write([]byte(`"Error": Missing Password in Data "`))
+		return
+	}
+	pwd = args[1]
+
+	// Retrieve a created Item that contains the hashed value of pwd
+	item, err := store.CreateItem(pwd)
+	if err != nil {
+		response.WriteHeader(http.StatusBadRequest)
+		log.Printf("\nGetHashHandler %v: ", err.Error())
+		response.Write([]byte(`"Error": Hashing Error "`))
 		return
 	}
 
-	// encrypt and store the value
+	// Store the new Item
 	var order int32
-	hasher := hasher.Encode
-	order, err = hasher(itemStore, pwd)
+	order, err = itemStore.StoreItem(item)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		log.Printf("\nGetHashHandler %v: ", err.Error())
-		response.Write([]byte(`"Error": Hasher error "`))
+		response.Write([]byte(`"Error": Storing error "`))
 		return
 	}
+
 	response.WriteHeader(http.StatusOK)
 	strOrder := strconv.Itoa(int(order))
 	response.Write([]byte(strOrder))
@@ -95,8 +103,7 @@ func GetHashHandler(itemStore *store.Store, response http.ResponseWriter, reques
 
 /*
 HandlerDefault returns when an unknown endpoint is called
-but is also used to extract and id from /hash/:id
-since net/http doesn't seem to handle URL args
+unless the url has a valid integer id as a hash arg: /hash/:id
 */
 func HandlerDefault(itemStore *store.Store, response http.ResponseWriter, request *http.Request) {
 	// handle /hash/:id situation if :id is an integer
@@ -109,15 +116,15 @@ func HandlerDefault(itemStore *store.Store, response http.ResponseWriter, reques
 			if err != nil {
 				response.WriteHeader(http.StatusInternalServerError)
 				log.Printf(`\nHandlerDefault testId %s %v`, testId, err.Error())
-				response.Write([]byte(err.Error()))
+				response.Write([]byte(`"Error": Invalid url format "`))
 				return
 			}
 			int32id := int32(id)
-			resp, err = itemStore.GetItem(int32id)
+			resp, err = itemStore.GetItemById(int32id)
 			if err != nil {
 				response.WriteHeader(http.StatusInternalServerError)
 				log.Printf(`\nHandlerDefault testId %s %v`, testId, err.Error())
-				response.Write([]byte(err.Error()))
+				response.Write([]byte(`"Error": Unable to retrieve by id "`))
 				return
 			}
 			response.WriteHeader(http.StatusOK)

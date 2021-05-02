@@ -10,11 +10,11 @@ import (
 )
 
 /*
-StartRouter defines the endpoints that use the db_pool for database connections
+StartRouter defines the exposed endpoints, some of which
+make sure of itemStore as we are not using a persistent database
 */
 func StartRouter(itemStore *store.Store) {
-	// enable graceful shutdown per http documentation
-
+	// net/http server
 	var srv http.Server
 	srv.Addr = ":8080"
 	// Overriding some limits and timeouts
