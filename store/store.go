@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -10,10 +11,10 @@ import (
 Item type has the requested order, resulting crypto value and duration to complete encryption
 */
 type Item struct {
-	Order    int32         `json:"order"`
-	Value    string        `json:"value"`
-	Duration time.Duration `json:"duration"`
-	Publish  *time.Time    `json:"publish"`
+	Order     int32      `json:"order"`
+	Value     string     `json:"value"`
+	Requested *time.Time `json:"requested"`
+	Publish   *time.Time `json:"publish"`
 }
 
 /*
@@ -76,18 +77,22 @@ StoreItem stores the item only if it has Value, Duration and Publish time
 */
 func (s *Store) StoreItem(item Item) (int32, error) {
 
-	if item.Duration == 0 {
-		return 0, errors.New("missing duration")
-	}
-	if item.Publish == nil {
-		return 0, errors.New("missing Publish")
+	if item.Requested == nil {
+		return 0, errors.New("missing Requested")
 	}
 	if item.Value == "" {
 		return 0, errors.New("missing value")
 	}
+	t := item.Requested
+	// Do not allow access to item until 5 minutes from now
+	publishTime := t.Add(time.Second * 5)
+	item.Publish = &publishTime
 	s.Counter = s.Counter + 1
-	s.Durations = s.Durations + item.Duration.Nanoseconds()
 	item.Order = s.Counter
 	s.Items[item.Order] = item
+	// Get a duration for the time to hash and store
+	duration := publishTime.Sub(*item.Requested)
+	log.Printf("\nend %v, duration %v", t, duration)
+	s.Durations = s.Durations + duration.Nanoseconds()
 	return item.Order, nil
 }

@@ -29,9 +29,6 @@ func StartRouter(itemStore *store.Store) {
 	router.HandleFunc("/hash", func(w http.ResponseWriter, r *http.Request) {
 		GetHashHandler(itemStore, w, r)
 	})
-	router.HandleFunc("/hash/:id", func(w http.ResponseWriter, r *http.Request) {
-		GetHashHandler(itemStore, w, r)
-	})
 	router.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Shutting Down"))
 		ctx, cancel := context.WithCancel(context.Background())
@@ -42,7 +39,7 @@ func StartRouter(itemStore *store.Store) {
 		}
 	})
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		HandlerDefault(w, r)
+		HandlerDefault(itemStore, w, r)
 	})
 
 	srv.Handler = router
