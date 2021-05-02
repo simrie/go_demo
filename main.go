@@ -1,7 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/simrie/go_demo.git/server"
+)
 
 func main() {
-	fmt.Println("Hello, world.")
+	fmt.Println("How ya' doin'?")
+
+	server.StartRouter()
 }
