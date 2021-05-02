@@ -4,23 +4,15 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
 	"time"
+
+	"github.com/simrie/go_demo.git/store"
 )
-
-func hola(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hola\n"))
-}
-
-func hello(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello\n"))
-}
 
 /*
 StartRouter defines the endpoints that use the db_pool for database connections
 */
-func StartRouter() {
+func StartRouter(itemStore *store.Store) {
 	// enable graceful shutdown per http documentation
 
 	var srv http.Server
@@ -30,35 +22,35 @@ func StartRouter() {
 	srv.WriteTimeout = 10 * time.Second
 	srv.MaxHeaderBytes = 1 << 20
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/hello", hello)
-	mux.HandleFunc("/hola", hola)
-	mux.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
-		srv.Shutdown(context.Background())
+	router := http.NewServeMux()
+	router.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
+		GetStatsHandler(itemStore, w, r)
+	})
+	router.HandleFunc("/hash", func(w http.ResponseWriter, r *http.Request) {
+		GetHashHandler(itemStore, w, r)
+	})
+	router.HandleFunc("/hash/:id", func(w http.ResponseWriter, r *http.Request) {
+		GetHashHandler(itemStore, w, r)
+	})
+	router.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Shutting Down"))
+		ctx, cancel := context.WithCancel(context.Background())
+		log.Printf("shutting down server")
+		cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			log.Fatal(err)
+		}
+	})
+	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		HandlerDefault(w, r)
 	})
 
-	srv.Handler = mux
+	srv.Handler = router
 
-	idleConnsClosed := make(chan struct{})
-	go func() {
-		sigint := make(chan os.Signal, 1)
-		signal.Notify(sigint, os.Interrupt)
-		<-sigint
-
-		// We received an interrupt signal, shut down.
-		if err := srv.Shutdown(context.Background()); err != nil {
-			// Error from closing listeners, or context timeout:
-			log.Printf("HTTP server Shutdown: %v", err)
-		}
-		close(idleConnsClosed)
-	}()
-
+	log.Printf("starting server")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		// Error starting or closing listener:
 		log.Fatalf("HTTP server ListenAndServe: %v", err)
 	}
-	<-idleConnsClosed
-
-	log.Printf("server started")
 
 }

@@ -21,7 +21,9 @@ func Encode(itemStore *store.Store, str string) (int32, error) {
 	duration := t.Sub(start)
 	item.Value = value
 	item.Duration = duration
-	// call go routine, do not wait for return error
+	// Do not allow access to item until 5 minutes from now
+	publishTime := t.Add(time.Minute * 5)
+	item.Publish = &publishTime
 	order, err := itemStore.StoreItem(item)
 	if err != nil {
 		return 0, err

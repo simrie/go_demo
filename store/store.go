@@ -20,8 +20,9 @@ type Item struct {
 Store type is a map of Items stored by request order
 */
 type Store struct {
-	Items   map[int32]Item `json:"items"`
-	Counter int32          `json:"counter"`
+	Items     map[int32]Item `json:"items"`
+	Counter   int32          `json:"counter"`
+	Durations int64          `json:"durations"`
 }
 
 /*
@@ -32,15 +33,22 @@ type Stats struct {
 	Average float64 `json:"average"`
 }
 
+func InitializeStore() (s *Store) {
+	items := make(map[int32]Item, 0)
+	var store Store = Store{Items: items, Counter: 0}
+	return &store
+}
+
 /*
 GetStats function returns the total and average duration of all Store Items
 */
 func (s *Store) GetStats() (Stats, error) {
-	numerator := int64(0)
-	for _, item := range s.Items {
-		numerator = item.Duration.Nanoseconds()
+	// short-circuit to prevent division by 0
+	if s.Counter == 0 || s.Durations == 0 {
+		var stats Stats = Stats{Total: s.Counter, Average: 0}
+		return stats, nil
 	}
-	average := float64(numerator) / float64(s.Counter)
+	average := float64(s.Durations) / float64(s.Counter)
 	var stats Stats = Stats{Total: s.Counter, Average: average}
 	return stats, nil
 }
@@ -78,6 +86,7 @@ func (s *Store) StoreItem(item Item) (int32, error) {
 		return 0, errors.New("missing value")
 	}
 	s.Counter = s.Counter + 1
+	s.Durations = s.Durations + item.Duration.Nanoseconds()
 	item.Order = s.Counter
 	s.Items[item.Order] = item
 	return item.Order, nil
