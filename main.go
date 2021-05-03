@@ -13,7 +13,7 @@ the function that starts the routed server
 so the router handler functions can access the itemStore
 */
 func main() {
-	fmt.Println("Go Demo with net/http server and graceful shutdown")
+	fmt.Println("Go Demo with net/http server")
 
 	// initialize empty itemStore
 	itemStore := store.InitializeStore()
