@@ -4,6 +4,9 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/simrie/go_demo.git/store"
@@ -14,6 +17,9 @@ StartRouter defines the exposed endpoints, some of which
 make sure of itemStore as we are not using a persistent database
 */
 func StartRouter(itemStore *store.Store) {
+
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// net/http server
 	var srv http.Server
 	srv.Addr = ":8080"
@@ -31,11 +37,13 @@ func StartRouter(itemStore *store.Store) {
 	})
 	router.HandleFunc("/shutdown", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Shutting Down"))
-		ctx, cancel := context.WithCancel(context.Background())
+		//ctx, cancel := context.WithCancel(context.Background())
 		log.Printf("shutting down server")
 		cancel()
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Fatal(err)
+			//log.Fatal(err)
+			log.Print(err)
+			defer os.Exit(0)
 		}
 	})
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +56,31 @@ func StartRouter(itemStore *store.Store) {
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		// Error starting or closing listener:
 		log.Fatalf("HTTP server ListenAndServe: %v", err)
+	}
+
+	// sigint shutdown
+	// how to references:
+	// https://rafallorenz.com/go/handle-signals-to-graceful-shutdown-http-server/
+	// https://medium.com/honestbee-tw-engineer/gracefully-shutdown-in-go-http-server-5f5e6b83da5a
+
+	// expecting more than one signal?
+	signalChan := make(chan os.Signal)
+
+	signal.Notify(
+		signalChan,
+		syscall.SIGHUP,  // kill -SIGHUP XXXX
+		syscall.SIGINT,  // kill -SIGINT XXXX or Ctrl+c
+		syscall.SIGQUIT, // kill -SIGQUIT XXXX
+		syscall.SIGKILL,
+		//syscall.CTRL_C_EVENT,
+	)
+
+	sig := <-signalChan
+	log.Printf("os.Interrupt sig %v - shutting down...\n", sig)
+
+	if sig != nil {
+		cancel()
+		defer os.Exit(0)
 	}
 
 }
