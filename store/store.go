@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/simrie/go_demo.git/hasher"
@@ -12,7 +13,7 @@ import (
 Item type has the requested order, resulting crypto value and duration to complete encryption
 */
 type Item struct {
-	//Order     int32      `json:"order"`
+	Order     int32      `json:"order"`
 	Value     string     `json:"value"`
 	Requested *time.Time `json:"requested"`
 	Publish   *time.Time `json:"publish"`
@@ -46,32 +47,37 @@ GetStats function returns the total and average duration of all Store Items
 */
 func (s *Store) GetStats() (Stats, error) {
 	// short-circuit to prevent division by 0
-	if s.Counter == 0 || s.Durations == 0 {
+	realCount := int32(len(s.Items))
+	if realCount == 0 || s.Durations == 0 {
 		var stats Stats = Stats{Total: s.Counter, Average: 0}
 		return stats, nil
 	}
-	average := float64(s.Durations) / float64(s.Counter)
-	var stats Stats = Stats{Total: s.Counter, Average: average}
+	average := float64(s.Durations) / float64(realCount)
+	var stats Stats = Stats{Total: realCount, Average: average}
 	return stats, nil
 }
 
 /*
-CreateItem accepts a string and returns an Item
+CreateItem accepts a string and timestamp and creates an Item
 that contains a Value that is the hash of the string
+and then passes the Item to StoreItem as a goroutine.
 */
-func CreateItem(str string) (Item, error) {
+func CreateItem(str string, requested *time.Time, orderKey int32) (Item, error) {
 	var item Item = Item{}
 	if str == "" {
 		return item, errors.New("missing string to encode")
+	}
+	if orderKey == 0 {
+		return item, errors.New("missing order key")
 	}
 	hasher := hasher.Encode
 	value, err := hasher(str)
 	if err != nil {
 		return item, errors.New("missing encoded value")
 	}
-	requested := time.Now()
-	item.Requested = &requested
+	item.Requested = requested
 	item.Value = value
+	item.Order = orderKey
 	return item, nil
 }
 
@@ -94,15 +100,18 @@ func (s *Store) GetItemById(i int32) (Item, error) {
 }
 
 /*
-StoreItem stores the item only if it has Value and Requested time
+StoreItem stores the item only if it has Value, Requested time and order key
 */
-func (s *Store) StoreItem(item Item) (int32, error) {
+func (s *Store) StoreItem(item Item) error {
 
 	if item.Requested == nil {
-		return 0, errors.New("missing Requested")
+		return errors.New("missing Requested")
 	}
 	if item.Value == "" {
-		return 0, errors.New("missing value")
+		return errors.New("missing value")
+	}
+	if item.Order == 0 {
+		return errors.New("missing order key")
 	}
 	t := item.Requested
 	// Do not allow access to item until 5 seconds from now
@@ -110,8 +119,39 @@ func (s *Store) StoreItem(item Item) (int32, error) {
 	item.Publish = &publishTime
 	// Get a duration for the time to hash and update store
 	duration := publishTime.Sub(*item.Requested)
-	s.Counter = s.Counter + 1
+	//s.Counter = s.Counter + 1
 	s.Durations = s.Durations + duration.Nanoseconds()
-	s.Items[s.Counter] = item
-	return s.Counter, nil
+	s.Items[item.Order] = item
+	return nil
+}
+
+/*
+Worker goroutine receives the requested info
+updates the Store.counter to get the new order key
+posts the order key to the channel before
+proceeding with the hashing and storing.
+Errors are logged but not returned or posted to any channel.
+*/
+func (s *Store) Worker(plainText string, requested *time.Time, orderCh chan int32) {
+	// update the store counter and claim the orderKey
+	s.Counter = s.Counter + 1
+	orderKey := int32(s.Counter)
+
+	// post the new orderKey to the channel
+	orderCh <- orderKey
+	log.Printf(`Worker sent orderKey %d to order channel `, orderKey)
+
+	// create the item that contains the hashed value
+	item, err := CreateItem(plainText, requested, orderKey)
+	if err != nil {
+		log.Printf("\nWorker CreateItem %d Failed: %v: ", orderKey, err.Error())
+		return
+	}
+
+	// store the item
+	err = s.StoreItem(item)
+	if err != nil {
+		log.Printf("\nWorker StoreItem %d Failed: %v: ", orderKey, err.Error())
+		return
+	}
 }

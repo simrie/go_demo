@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+var plaintText string = "angryMonkey"
+var expectedHashOfPlainText string = "ZEHhWB65gUlzdVwtDQArEyx+KVLzp/aTaRaPlBzYRIFj6vjFdqEb0Q5B8zVKCZ0vKbZPZklJz0Fd7su2A+gf7Q=="
+
 func TestStoreInitializeStore(t *testing.T) {
 	var items map[int32]Item = make(map[int32]Item, 0)
 	var expectedStore Store = Store{Counter: 0, Durations: 0, Items: items}
@@ -15,30 +18,28 @@ func TestStoreInitializeStore(t *testing.T) {
 }
 
 func TestStoreCreateItem(t *testing.T) {
+	//plainText, requested, orderKey
 
-	var testStrings = []struct {
-		tname    string
-		strTest  string
-		expected string
-	}{
-		{
-			"Test Store Create Item",
-			"angryMonkey",
-			"ZEHhWB65gUlzdVwtDQArEyx+KVLzp/aTaRaPlBzYRIFj6vjFdqEb0Q5B8zVKCZ0vKbZPZklJz0Fd7su2A+gf7Q==",
-		},
+	testName := "Store CreateItem"
+	reqTime := time.Now()
+	orderKey := int32(1)
+	var expectedItem Item = Item{Value: expectedHashOfPlainText, Requested: &reqTime, Order: orderKey}
+
+	if got, _ := CreateItem(plaintText, &reqTime, orderKey); &got != nil && got.Value != expectedItem.Value {
+		t.Errorf("Failed! %s : \n%s \ndoes not match expected : \n%s\n", testName, got.Value, expectedItem.Value)
 	}
-	for _, test := range testStrings {
-		if got, _ := CreateItem(test.strTest); &got != nil && got.Value != test.expected {
-			t.Errorf("Failed! %s : \n%s \ndoes not match expected : \n%s\n", test.tname, got.Value, test.expected)
-		}
-	}
+
 }
 
 func TestStoreGetStats(t *testing.T) {
 
 	var itemStore Store = Store{}
-	itemStore.Counter = 2
+	//itemStore.Counter = 2
 	itemStore.Durations = 4000000
+	var items map[int32]Item = make(map[int32]Item, 0)
+	items[0] = Item{}
+	items[1] = Item{}
+	itemStore.Items = items
 
 	var expectedStats Stats = Stats{Total: 2, Average: 2000000}
 
@@ -125,19 +126,19 @@ func TestStoreGetItemByIdButTooSoon(t *testing.T) {
 
 func TestStoreStoreItem(t *testing.T) {
 
+	var expectedKey int32 = 1
 	var items map[int32]Item = make(map[int32]Item, 0)
 	var itemStore Store = Store{Counter: 0, Durations: 0, Items: items}
 	var requestTime = time.Now()
 	var publishTime = requestTime.Add(time.Second * 5)
-	var newItem Item = Item{Value: "encryptedword", Requested: &requestTime}
-	var expectedItem Item = Item{Value: "encryptedword", Requested: &requestTime, Publish: &publishTime}
-	var expectedKey int32 = 1
+	var newItem Item = Item{Order: expectedKey, Value: "encryptedword", Requested: &requestTime}
+	var expectedItem Item = Item{Order: expectedKey, Value: "encryptedword", Requested: &requestTime, Publish: &publishTime}
 
 	// Call the function to add the newItem to itemStore
 	// We should get an int32 key back
 
-	if got, err := itemStore.StoreItem(newItem); err != nil || got != expectedKey {
-		t.Errorf("Failed! %s : \n%v \ndoes not match expected : \n%v\n", "TestStore StoreItem", got, expectedKey)
+	if err := itemStore.StoreItem(newItem); err != nil {
+		t.Errorf("Failed! %s : \n%v \nis not nil\n", "TestStore StoreItem", err)
 	}
 
 	// use the key returned to get the item from the itemStore

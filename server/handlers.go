@@ -54,7 +54,6 @@ func GetHashHandler(itemStore *store.Store, response http.ResponseWriter, reques
 		return
 	}
 
-	var pwd string
 	b, err := ioutil.ReadAll(request.Body)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
@@ -76,30 +75,30 @@ func GetHashHandler(itemStore *store.Store, response http.ResponseWriter, reques
 		response.Write([]byte(`"Error": Missing Password in Data "`))
 		return
 	}
-	pwd = args[1]
 
-	// Retrieve a created Item that contains the hashed value of pwd
-	item, err := store.CreateItem(pwd)
-	if err != nil {
-		response.WriteHeader(http.StatusBadRequest)
-		log.Printf("\nGetHashHandler %v: ", err.Error())
-		response.Write([]byte(`"Error": Hashing Error "`))
-		return
-	}
+	// Call worker as a goroutine with an unbuffered channel
+	pwd := args[1]
+	requested := time.Now()
+	orderCh := make(chan int32)
 
-	// Store the new Item
-	var order int32
-	order, err = itemStore.StoreItem(item)
-	if err != nil {
+	// Execute business logic in a worker
+	go itemStore.Worker(pwd, &requested, orderCh)
+
+	var orderKey int32
+	orderKey = <-orderCh
+
+	if orderKey < 0 {
 		response.WriteHeader(http.StatusInternalServerError)
-		log.Printf("\nGetHashHandler %v: ", err.Error())
-		response.Write([]byte(`"Error": Storing error "`))
+		log.Printf("\nGetHashHandler did not receive orderKey")
+		response.Write([]byte(`"Error": Unable to process "`))
 		return
 	}
 
+	log.Println("GetHashHandler received orderKey", orderKey)
 	response.WriteHeader(http.StatusOK)
-	strOrder := strconv.Itoa(int(order))
+	strOrder := strconv.Itoa(int(orderKey))
 	response.Write([]byte(strOrder))
+
 }
 
 /*
